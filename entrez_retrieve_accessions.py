@@ -47,9 +47,12 @@ def entrez_retrieve_accessions(db, term, output_file, retmax):
 			accessions.append(acc_record[0]['GBSeq_primary-accession'])
 			acc_handle.close()                                         
         
+
+		## write accession numbers to output <txt> file
+
 		with open(output_file, "w") as output:
 			accessions_delim = '\n'.join(accessions)
-			output.write(f'# Total number of genomes retrieved with esearch term {term}: {total_records}.\n')
+			#output.write(f'# Total number of genomes retrieved with esearch term {term}: {total_records}.\n')
 			output.write(accessions_delim)
 		 
 
@@ -71,21 +74,24 @@ def entrez_retrieve_accessions(db, term, output_file, retmax):
 		#protein_handle.close()
 
 		## Obtain accession numbers for nonredundant protein records with efetch
-		## This chunk works
 
 		accessions = list()
 
 		for uid in uids:
+
 			# retrieve record
+
 			acc_handle = Entrez.efetch(db=db, id=uid, retmode="xml")
 			acc_record = Entrez.read(acc_handle)
 			
 			# make list of primary accessions
+
 			accessions.append(acc_record[0]['GBSeq_primary-accession'])
 			acc_handle.close()
 
 		## for now, return the accessions from Entrez.esearch() simply using the user-
-		## provided database
+		## provided database. can change with the commented out code above.
+
 		with open(output_file, "w") as output:
 			accessions_delim = '\n'.join(accessions)
 			output.write(accessions_delim)
