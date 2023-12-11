@@ -18,7 +18,9 @@ def entrez_get_prots_from_acc(acc_file):
 	name = name.replace("_protIDs", "")
 	output_file = f'{name}.faa'
 	Entrez.email = "halvorsen1@llnl.gov"
-	
+
+
+	## Read in accessions	
 	accs = list()
 	with open(acc_file, "r") as acc_list:
 		for line in acc_list:
@@ -26,14 +28,17 @@ def entrez_get_prots_from_acc(acc_file):
 			if not line.startswith('#'):
 				accs.append(line)
 
+	## Create string of all accessions
 	accs_str = ",".join(str(acc) for acc in accs)
 
+	## Access sequences and write to output file
 	with open(output_file, "w") as output:
 		handle = Entrez.efetch(db='protein', id=accs_str, rettype = "fasta", retmode="text")
 		for seq_record in SeqIO.parse(handle, "fasta"):
 			output.write(f'>{seq_record.description}\n{seq_record.seq}\n')
 		handle.close()
-			
+	
+	print(f'Done writing protein sequences to {output_file}')	
 	return output
 
 
