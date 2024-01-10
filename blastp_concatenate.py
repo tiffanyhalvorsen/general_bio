@@ -2,7 +2,7 @@
 
 import sys
 from pathlib import Path
-
+import re
 
 def blastp_concatenate(input_file_path, input_file_pattern, output_file):
 
@@ -15,19 +15,20 @@ def blastp_concatenate(input_file_path, input_file_pattern, output_file):
         for file in files:
             with open(file, "r") as input_file:
                 for line in input_file:
-                    if line.startswith('# Field:'):
-                        line.lstrip('# Field:')
+                    if line.startswith('# Field'):
+                        #line.lstrip('# Field')
                         line.rstrip()
-                        headers = line.split(', ')
+                        newline = re.sub(r'^(# Field.+?\S)', r'', line)
+                       	headers = newline.split(', ')
                         if header_flag == 0:
-                            fields = headers.join('\t')
+                            fields = "\t".join(headers)
                             output.write(f'{fields}\n')
                             header_flag = 1
                     if not line.startswith('#') and not line.startswith('query_id'):
-                        #print(line)
                         output.write(line)
                         line = line.rstrip()
                         data = line.split('\t')
+                        #print(data)
                         blastp_dict[data[1]] = dict(zip(headers, data))
     return blastp_dict
 
@@ -37,7 +38,7 @@ def main():
     input_file_pattern = sys.argv[2]
     output_file = sys.argv[3]
 
-    usage = f'\n\n\tusage: {sys.argv[0]} filename.fasta'
+    usage = f'\n\n\tusage: {sys.argv[0]} filename.fasta\n\n'
 
     if len(sys.argv) <3:
         sys.stderr.write(usage)
