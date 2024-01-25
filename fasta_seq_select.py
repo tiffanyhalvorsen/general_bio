@@ -3,6 +3,14 @@
 import sys
 import re
 
+## This program allows you to extract specific sequences from a whole genome fasta, using coordinates.
+## usage:
+## (1) input fasta file
+## (2) sequence start
+## (3) sequence end
+## (4) origin of fasta (ncbi or ATCC) 
+
+
 def fasta_seq_select(input_file, file_origin):
 	summary = {}
 	whole_seq = ''
@@ -43,8 +51,9 @@ def fasta_seq_select(input_file, file_origin):
 		elif file_origin == "ncbi":
 			for line in file:
 				line = line.rstrip()
+
 				if line.startswith('>'):
-					match = re.search(r'^>(\S+)\s(\S+\s\S+\s\S+),\s(\S+\s\S+)', line)
+					match = re.search(r'^>(\S+)\s(.+),\s(.+)$', line)
 					
 					summary['accession'] = match.group(1)
 					summary['species'] = match.group(2)
