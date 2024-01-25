@@ -17,7 +17,7 @@ def get_prot_IDs(input_fasta):
 	
 	with open(output_file, "w") as output:
 		for record in SeqIO.parse(input_fasta, "fasta"):
-			match = re.search(r'.\d_cds_(.+.\d)_\d+$', record.id)
+			match = re.search(r'.\d_cds_(.+.\d_\d+).+$', record.id)
 			prot_ID = match.group(1)
 			output.write(f'{prot_ID}\n')	
 
@@ -26,8 +26,14 @@ def get_prot_IDs(input_fasta):
 
 def main():
 
-	input_fasta = sys.argv[1]
 	
+	usage = f'\n\n\tusage: {sys.argv[0]} input.fasta.\n\n\tReturns an output <[input-filename]_protIDs.txt> file to current directory.\n\n'
+
+	if len(sys.argv) < 2:
+		sys.stderr.write(usage)
+		sys.exit(1)
+	
+	input_fasta = sys.argv[1]
 	get_prot_IDs(input_fasta)
 
 if __name__ == '__main__':
