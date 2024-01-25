@@ -9,34 +9,36 @@ find . -mindepth 1 -maxdepth 2 -type d | while IFS= read -r dir; do
 		testfile="${dir}_prots.faa"
 		assembly="$(basename -- $file)"
 		#cd ${dir}/
+
+		echo -e "\nLooking for files matching: $file_type in $dir\n"
+
 		if [[ $file =~ ^.+_MAG_genomic.fna$ ]]; then
 			cd ${dir}
 
-			if ! [ -f ${testfile} ]; then
-				echo "\nProcessing metagenome $file"
-				prodigal -i $assembly -d ${outname}_genes.fna -a ${outname}_prots.faa -p meta -t ${outname}_training.txt 2> prodigal.log
-				echo "done"
+			if [ ! -s ${testfile} ]; then
+				echo -e "\n\nProcessing metagenome $file\n\n"
+				prodigal -i $assembly -d ${outname}_genes.fna -a ${outname}_prots.faa -o ${outname}.out -p meta  2> prodigal.log
 				grep -c '>' ${outname}_prots.faa > total_prots.txt
 			else
-				echo -e "\n$assembly has already been processed by prodigal\n"
+				echo -e "\n\n$assembly has already been processed by prodigal\n\n"
 			fi 
 
 
-			if ! [[ -f *dmnd ]]; then
-				echo "Making diamond database file for ${outname}"
+			if [ ! -f *dmnd ]; then
+				echo -e "\n\nMaking diamond database file for ${outname}\n\n"
 				diamond makedb --in ${outname}_prots.faa --db ${outname} 2> diamond.log
 				echo "done"
 			else
-				echo -e "$assembly has already been processed by diamond\n\n"
+				echo -e "\n\n$assembly has already been processed by diamond\n\n"
 
 			fi
 			cd ../
 
 		elif [[ $file =~ ^.+_genomic.fna$ ]]; then
 			cd ${dir}
-			if ! [ -f ${testfile} ]; then
+			if [ ! -s ${testfile} ]; then
 				echo -e "Processing genome $file\n\n"	
-				prodigal -i $assembly -d ${outname}_genes.fna -a ${outname}_prots.faa -o ${outname}.out -t ${outname}_training.txt 2> prodigal.log
+				prodigal -i $assembly -d ${outname}_genes.fna -a ${outname}_prots.faa -o ${outname}.out 2> prodigal.log
 				cat prodigal.log
 				grep -c '>' ${outname}_prots.faa > total_prots.txt
 			else
@@ -44,12 +46,12 @@ find . -mindepth 1 -maxdepth 2 -type d | while IFS= read -r dir; do
 			fi
 
 
-			if ! [[ -f *dmnd ]]; then
-				echo "Making diamond database file for ${outname}"
+			if [ ! -f *dmnd ]; then
+				echo -e "\n\nMaking diamond database file for ${outname}\n\n"
 				diamond makedb --in ${outname}_prots.faa --db ${outname} 2> diamond.log
 				cat diamond.log
 			else
-				echo -e "$assembly has already been processed by diamond\n\n"
+				echo -e "\n\n$assembly has already been processed by diamond\n\n"
 			fi
 
 			cd ../
