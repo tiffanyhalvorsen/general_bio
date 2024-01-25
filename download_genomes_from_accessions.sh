@@ -5,6 +5,9 @@
 ## ORF file for each accession. Files are saved to a folder with the accession
 ## number in the current working directory.
 
+
+## USAGE: download_genomes_from_accessions.sh <accessions_list.txt>
+
 # Input accession file
 accessions=$1
 
