@@ -4,13 +4,18 @@ import sys
 from pathlib import Path
 import re
 import os
+import fnmatch
 
 def blastp_concatenate(input_file_path, input_file_pattern):
 
     blastp_dict = {}
     headers = set()
 #    input_file_path = str(input_file_path)
-    files = Path(input_file_path).glob(input_file_pattern)
+    if os.path.exits(Path(input_file_path).glob(input_file_pattern)):
+        files = Path(input_file_path).glob(input_file_pattern)
+    else:
+        sys.exit(f'Files at {input_file_path} do not exist.')
+
     header_flag = 0
 
     if input_file_path.startswith('GC'):
@@ -53,11 +58,18 @@ def blastp_concatenate_between_directories(pattern, output_file):
     headers = set()
 #   input_file_path = str(input_file_path)
     header_flag = 0
-
     with open(output_file, "w") as output:
-       for dirpath, dirnames, filenames in os.walk("."):
-           for filename in [f for f in filenames if f.endswith(pattern)]:
-               file = os.path.join(dirpath, filename) 
+       for root, dirnames, filenames in os.walk('.'):
+           matches = fnmatch.filter(filenames, pattern)
+           #dir_list = [d for d in dirnames if d.startswith('GC')]
+           
+           ## Open only files matching user-provided pattern in regex format
+           ## Commented out line can be used to search instead for a file extension, not in regex format
+
+           #for filename in [f for f in filenames if f.endswith(pattern)]:
+           for filename in [f for f in filenames if f in matches]:
+               file = os.path.join(root, filename)
+               print(file)
                with open(file, "r") as input_file:
                    for line in input_file:
                        if line.startswith('# Field'):
@@ -98,8 +110,7 @@ def main():
             input_file_pattern = sys.argv[1]
             output_file = sys.argv[2] 
             blastp_concatenate(input_file_path, input_file_pattern)
- 
-        else:
+        else: 
             pattern = sys.argv[1]
             output_file = sys.argv[2]
             blastp_concatenate_between_directories(pattern, output_file)
