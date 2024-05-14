@@ -9,6 +9,7 @@ import os
 import urllib
 import json
 import pandas as pd
+import argparse
 
 def retrieve_esummary(id, db):
 
@@ -20,25 +21,27 @@ def retrieve_esummary(id, db):
 	return esummary_record
 
 
-def get_assemblies(email, term, output_prefix, retmax, download=False, path='assemblies'):
+def get_assemblies(email, term, prefix, coverage_threshold, retmax, download, path='assemblies'):
 
 	## Download genbank assemblies for a search term
 	## term: usually organism name
 	## download: default is True
 	## path: where to save assemblies
 
-	Entrez.email = email
-	
+    Entrez.email = email
+
+
 	## Esearch returns uid numbers (unique identifiers). Use the uid to retrieve
 	## accession numbers with esummary.
-	
-	handle = Entrez.esearch(db="assembly", term=term, retmax=retmax)
-	record = Entrez.read(handle)
-	total_hits = record['Count']
-	print(f'\nTotal hits in genome assembly database: {total_hits}\n')
-	uids = record['IdList']
-	total_records = len(uids)
-		
+    handle = Entrez.esearch(db="assembly", term=term, retmax=retmax)
+    record = Entrez.read(handle)
+
+    total_hits = record['Count']
+    print(f'\nTotal hits in genome assembly database: {total_hits}\n')
+    uids = record['IdList']
+    total_records = len(uids)
+
+
 	## ALTERNATIVE: RETRIEVE ACCESSIONS FROM A DIFFERENT DATABASE WITH ELINK
 
 	# genome_handle = Entrez.elink(dbfrom="genome", db="nucleotide", from_uid=uids)
@@ -61,38 +64,50 @@ def get_assemblies(email, term, output_prefix, retmax, download=False, path='ass
 		
 		##  Make list of primary accessions                          
 		
-		# accessions.append(acc_record[0]['GBSeq_primary-accession'])
-		# acc_handle.close()                                         
-	accessions = list()
-	links = list()
-	info = dict()
+    	# accessions.append(acc_record[0]['GBSeq_primary-accession'])
+    	# acc_handle.close()                                         
+    filtered_accessions = list()
+    removed_accessions = list()
+    links = list()
+    info = dict()
 
 	## Make a new directory based on provided path name
-	directory = path
-	if not os.path.exists(directory):
-		os.mkdir(directory)
+    directory = path
+    if not os.path.exists(directory):
+        os.mkdir(directory)
 	
 	## Move into new directory
-	new_folder = Path(f"./{directory}/")
-	os.chdir(new_folder)
+    new_folder = Path(f"./{directory}/")
+    os.chdir(new_folder)
 	
 
-	for uid in uids:
-		## Get summary
-		summary = retrieve_esummary(id=uid, db="assembly")
-		## Add accession to list
-		accessions.append(summary['DocumentSummarySet']['DocumentSummary'][0]['AssemblyAccession'])
-		
+    for uid in uids:
+	    ## Get summary
+        summary = retrieve_esummary(id=uid, db="assembly")
+        summary.str = json.dumps(summary, indent=4)
+#        print(json.dumps(summary['DocumentSummarySet']['DocumentSummary'][0]['ExclFromRefSeq']))
+        summary_info = summary['DocumentSummarySet']['DocumentSummary'][0]
+        partial_genome = summary['DocumentSummarySet']['DocumentSummary'][0]['PartialGenomeRepresentation']
+        accession = summary_info['AssemblyAccession']
+        coverage = float(summary['DocumentSummarySet']['DocumentSummary'][0]['Coverage'])
+        #print(summary['DocumentSummarySet']['DocumentSummary'][0])
+
+		## Create separate lists for accessions from high quality assemblies and those that are not
+        if coverage >= float(coverage_threshold):
+            filtered_accessions.append(summary_info['AssemblyAccession'])
+        else:
+            removed_accessions.append(summary_info['AssemblyAccession'])
+	
 		# Populate information dict
-		accession = summary['DocumentSummarySet']['DocumentSummary'][0]['AssemblyAccession']
-		organism = ('organism' , summary['DocumentSummarySet']['DocumentSummary'][0]['Organism'])
-		taxid = ('taxid' , summary['DocumentSummarySet']['DocumentSummary'][0]['SpeciesTaxid'])
+        assembly_status = ('assemby_status', summary_info['AssemblyStatus'])
+        organism = ('organism' , summary_info['Organism'])
+        assembly_name = ('assembly_name', summary_info['AssemblyName'])
+        coverage = ('coverage', summary_info['Coverage'])
+        taxid = ('taxid' , summary_info['SpeciesTaxid'])	
 		## Make a variables for obtaining strain information below
-		extra_info = summary['DocumentSummarySet']['DocumentSummary'][0]['ExclFromRefSeq']
-		strain_info = summary['DocumentSummarySet']['DocumentSummary'][0]['Biosource']['InfraspeciesList']
-		info[accession] = [organism, taxid]
-		#print(summary['DocumentSummarySet']['DocumentSummary'][0])
-		#print(f'\n\n')
+        extra_info = summary_info['ExclFromRefSeq']
+        strain_info = summary_info['Biosource']['InfraspeciesList']
+        info[accession] = [organism, taxid, assembly_name, coverage, assembly_status]
 		
 		## Populate dictionary with strain information.
 		## Completed assemblies will have a strain code as 'Sub_value', and a RefSeq accession
@@ -101,101 +116,105 @@ def get_assemblies(email, term, output_prefix, retmax, download=False, path='ass
 		## exluded from the RefSeq database (taken from "extra_info" variable, which mapes to the 
 		## 'ExclFromRefSeq' information).
 
-		if len(strain_info) > 0:
-			strain = ('strain' , strain_info[0]['Sub_value'])
-		else:
-			if len(extra_info) > 1:
-				str1 = extra_info[0]
-				str2 = extra_info[1]
-				str3 = summary['DocumentSummarySet']['DocumentSummary'][0]['Biosource']['Isolate']
-				strain = ('strain' , f'{str1}; {str2}; {str3}')
-			elif len(extra_info) == 1:
-				str1 = extra_info[0]
-				str3 = summary['DocumentSummarySet']['DocumentSummary'][0]['Biosource']['Isolate']
-				strain = ('strain' , f'{str1}; {str3}')
-			else:
-				str3 = summary['DocumentSummarySet']['DocumentSummary'][0]['Biosource']['Isolate']
-				strain = ('strain' , f'{str3}')
-		info[accession].append(strain)
+        if len(strain_info) > 0:
+            strain = ('strain' , strain_info[0]['Sub_value'])
+        else:
+            if len(extra_info) > 1:
+                str1 = extra_info[0]
+                str2 = extra_info[1]
+                str3 = summary['DocumentSummarySet']['DocumentSummary'][0]['Biosource']['Isolate']
+                strain = ('strain' , f'{str1}; {str2}; {str3}')
+            elif len(extra_info) == 1:
+                str1 = extra_info[0]
+                str3 = summary['DocumentSummarySet']['DocumentSummary'][0]['Biosource']['Isolate']
+                strain = ('strain' , f'{str1}; {str3}')
+            else:
+                str3 = summary['DocumentSummarySet']['DocumentSummary'][0]['Biosource']['Isolate']
+                strain = ('strain' , f'{str3}')
+        info[accession].append(strain)
 	
-		if download==True:
-			print("Downloading...\n\n")
-			## Get ftp link
-			url = summary['DocumentSummarySet']['DocumentSummary'][0]['FtpPath_RefSeq']
-			if url == '':
-				url = summary['DocumentSummarySet']['DocumentSummary'][0]['FtpPath_GenBank']
-				print(f'\tNo RefSeq file available for:\n\n\t {info[accession]}.\n\t Downloading GenBank file.\n\t Check metadata file for info.\n')
-	
-			## Get FASTA link
-			label = os.path.basename(url)
-			link = os.path.join(url,label+'_genomic.fna.gz')
-			print(f'{link}\n')
-			links.append(link)
-			urllib.request.urlretrieve(link, f'{label}.fna.gz')
-	
-	## Write accession numbers to output <txt> file
-	prefix = output_prefix
-	accessions_file = prefix + "_accessions.txt"
- 	
-	## Create a dataframe from info dict to make csv of strain informatio
-	rows = []
-	for row_key, inner_list in info.items():
-		for col_key, value in inner_list:
-			rows.append({'Row': row_key, 'Column': col_key, 'Value': value})
-	df = pd.DataFrame(rows)
-	df_pivoted = df.pivot(index='Row', columns='Column', values='Value')
-	df_pivoted.reset_index(inplace=True)
-	df_pivoted.index.name = None
-	df_pivoted.rename(columns={'Row': 'accession'}, inplace=True)
-	print(f'Search results (saved to {output_prefix}_assembly_info.csv)\n\n {df_pivoted}') 
-	
-	# Write the DataFrame to a CSV file
-	df_pivoted.to_csv(f'{output_prefix}_assembly_info.csv', index=False)
-	
-	with open(accessions_file, "w") as acc_output:
-		accessions_delim = '\n'.join(accessions)
-		#output.write(f'# Total number of genomes retrieved with esearch term {term}: {total_records}.\n')
-		acc_output.write(accessions_delim)
+        if download == 'filtered' or download == 'nonfiltered':
+            
+            # Get ftp link
+            url = summary['DocumentSummarySet']['DocumentSummary'][0]['FtpPath_RefSeq']
+			
+            ## Retrieve asseblies RefSeq record
+            if (url != '' and float(summary_info['Coverage']) >= float(coverage_threshold)):
+                label = os.path.basename(url)
+                link = os.path.join(url,label+'_genomic.fna.gz')
+                links.append(link)
+                urllib.request.urlretrieve(link, f'{label}.fna.gz')
+                print(f'Downloading....\n{link}\n')
+            
+            ## Check for bad quality assemblies, retrieve assembly if desired using GenBank record
+            elif (url == '' and float(summary_info['Coverage']) >= float(coverage_threshold) and download == 'nonfiltered'):
+                print(f'\tNo RefSeq file available for:\n\n\t {accession}\n\tProbably from metagenome?\n\tAdditional info from NCBI: {extra_info} \n\t{coverage} \n\t{assembly_status}.\n\t Downloading GenBank file if coverage >{coverage_threshold}.\n\tCheck metadata file for info.\n')
+                url = summary['DocumentSummarySet']['DocumentSummary'][0]['FtpPath_GenBank']
+                label = os.path.basename(url)
+                link = os.path.join(url,label+'_genomic.fna.gz')
+                links.append(link)
+                urllib.request.urlretrieve(link, f'{label}.fna.gz')
+                print(f'Downloading despite low quality....\n{link}\n')
 
-	print(f'\n{total_records} total UIDs accessed from "assembly" database using search term {term}. Data for {len(accessions)} records written to ./accessions/\n')
+            elif url == '' and download == 'filtered':
+                print(f'No RefSeq file available for:\n\n\t{accession}\n\tAdditional info from NCBI:{extra_info}\n\t{coverage}\n\t{assembly_status}\n\tTo download anyway, rerun and set download to --nonfiltered.\n')
+
+#            ## Get FASTA link
+#           label = os.path.basename(url)
+#           link = os.path.join(url,label+'_genomic.fna.gz')
+            
+#           ## Download FASTA
+#           print(f'{link}\n\n')
+#           links.append(link)
+#           urllib.request.urlretrieve(link, f'{label}.fna.gz')
+
+	## Write accession numbers to output <txt> file
+    accessions_file = prefix + "_accessions.txt"
 	
-	handle.close()
-	return links, accessions, accessions_file
+	## Create a dataframe from info dict to make csv of strain information
+    rows = []
+    for row_key, inner_list in info.items():
+        for col_key, value in inner_list:
+            rows.append({'Row': row_key, 'Column': col_key, 'Value': value})
+    df = pd.DataFrame(rows)
+    df_pivoted = df.pivot(index='Row', columns='Column', values='Value')
+    df_pivoted.reset_index(inplace=True)
+    df_pivoted.index.name = None
+    df_pivoted.rename(columns={'Row': 'accession'}, inplace=True)
+    print(f'Search results saved to {prefix}_assembly_info.csv\n\n {df_pivoted})')
+
+	# Write the DataFrame to a CSV file
+    df_pivoted.to_csv(f'{prefix}_assembly_info.csv', index=False)
+
+    with open(accessions_file, "w") as acc_output:
+        if len(removed_accessions) > 0:
+            print(f'Some accessions were of low quality and removed from final list (more info in CSV file):\n\n')
+            accessions_delim = '\n'.join(filtered_accessions)
+            print('\n'.join(removed_accessions))
+			#output.write(f'# Total number of genomes retrieved with esearch term {term}: {total_records}.\n')
+            acc_output.write(accessions_delim)
+        else:	
+            accessions_delim = '\n'.join(filtered_accessions)
+			#output.write(f'# Total number of genomes retrieved with esearch term {term}: {total_records}.\n')
+            acc_output.write(accessions_delim)
+
+    print(f'\n{total_records} total UIDs accessed from "assembly" database using search term {term}.\nData for {len(filtered_accessions)} records written to ./accessions/\n')
+	
+    handle.close()
+    return links, filtered_accessions, accessions_file
 
 def main():
-    
-    usage = f'\n\tThis script can be used to access Entrez Assembly database and query it for strains of interest.\nResults can be used to create a list of accession numbers, written to a <txt> file using input prefix name.\nIf the last parameter provided is "Yes", FASTA files for each accession will be downloaded into "assemblies" in current directory.\n\n\tNOTE: first 3 parameters are required.\n\n\tusage: {sys.argv[0]} \n\n\tParameters:\n\t(1) Email address (e.g, "bionerd@hotmail.com") for Entrez database query.\n\t(2) Search term (e.g., "Pseudomonas[Orgn] AND luxR[Gene]"\n\t(3) Output file prefix (e.g., "pseudomonas-luxR")\n\t(4) Max # of results to return (optional, default is 20)\n\t(5) Do you want to download genome assemblies? Type "Yes" as 5th parameter.\n\nNOTE: accessions.txt file will be over-written if program is re-run in same directory with same prefix.\n\n\n'
-
-    
-    if len(sys.argv) < 4:
-        sys.stderr.write(usage)
-        sys.exit(1)
-
-    elif len(sys.argv) == 4:
-        retmax = 20
-        email = sys.argv[1]
-        term = sys.argv[2]
-        output_prefix = sys.argv[3]
-        get_assemblies(email, term, output_prefix, retmax)
-    
-    elif len(sys.argv) == 5:
-        email = sys.argv[1]
-        term = sys.argv[2]
-        output_prefix = sys.argv[3]
-        retmax = sys.argv[4]
-        get_assemblies(email, term, output_prefix, retmax)
-    
-    elif len(sys.argv) == 5:
-        email = sys.argv[1]
-        term = sys.argv[2]
-        output_prefix = sys.argv[3]
-        retmax = sys.argv[4]
-        if sys.argv[5] == "Yes":    
-            get_assemblies(email, term, output_prefix, retmax, download=True)
-        else:
-            sys.stderr.write("Last parameter should be 'Yes' to intitate assembly FASTA download.")
-            sys.exit(1)
 	
+    parser = argparse.ArgumentParser(description="Script for downloading genomes and their metadata from NCBI Entrez browser.")
+    parser.add_argument('-e', '--email', type=str, required=True, help='Email to provide server.')
+    parser.add_argument('-t', '--term', type=str, required=True, help='A search term for searching NCBI assembly database. Use single quotes with spaces.')
+    parser.add_argument('-p', '--prefix', type=str, required=True, help='Prefix appended to output files.')
+    parser.add_argument('-c', '--coverage', type=str, required=False, default=5, help='Set coverage threshold for assemblies to download.')
+    parser.add_argument('-m', '--retmax', type=int, required=False, default=20, help='Set max number of assemblies to download. Default is 20. Can run script without downloading to see total number of available assemblies in database then set --retmax to that value if downloading all assemblies is desired.')
+#    parser.add_argument('-d', '--download', action=argparse.BooleanOptionalAction, required=False, default=False, help='Should assemblies be downloaded into current directory? Defaults to --no-download.')
+    parser.add_argument('-d', '--download', choices=['none', 'nonfiltered', 'filtered'], nargs='?', default='none', const='none', required=False, help='')
+    args = parser.parse_args()
+    get_assemblies(args.email, args.term, args.prefix, args.coverage, args.retmax, args.download)	
 	
 if __name__ == '__main__':
-	main()
+    main()
