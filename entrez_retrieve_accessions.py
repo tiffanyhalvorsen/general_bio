@@ -21,7 +21,7 @@ def retrieve_esummary(id, db):
 	return esummary_record
 
 
-def get_assemblies(email, term, prefix, coverage_threshold, retmax, download, path='assemblies'):
+def get_assemblies(email, term, prefix, source, coverage_threshold, retmax, download, path='assemblies'):
 
 	## Download genbank assemblies for a search term
 	## term: usually organism name
@@ -75,6 +75,9 @@ def get_assemblies(email, term, prefix, coverage_threshold, retmax, download, pa
     directory = path
     if not os.path.exists(directory):
         os.mkdir(directory)
+        print("Director does not exist")
+    else:
+        print("Directory exists")
 	
 	## Move into new directory
     new_folder = Path(f"./{directory}/")
@@ -85,7 +88,7 @@ def get_assemblies(email, term, prefix, coverage_threshold, retmax, download, pa
 	    ## Get summary
         summary = retrieve_esummary(id=uid, db="assembly")
         summary.str = json.dumps(summary, indent=4)
-#        print(json.dumps(summary['DocumentSummarySet']['DocumentSummary'][0]['ExclFromRefSeq']))
+        #print(json.dumps(summary['DocumentSummarySet']['DocumentSummary'][0]['ExclFromRefSeq']))
         summary_info = summary['DocumentSummarySet']['DocumentSummary'][0]
         partial_genome = summary['DocumentSummarySet']['DocumentSummary'][0]['PartialGenomeRepresentation']
         accession = summary_info['AssemblyAccession']
@@ -133,31 +136,69 @@ def get_assemblies(email, term, prefix, coverage_threshold, retmax, download, pa
                 strain = ('strain' , f'{str3}')
         info[accession].append(strain)
 	
-        if download == 'filtered' or download == 'nonfiltered':
+        excluded=summary['DocumentSummarySet']['DocumentSummary'][0]['ExclFromRefSeq']
+
+        ## Retrieve asseblies RefSeq record
+        if source == 'refseq':
+
+            # Get ftp link
+            if (download == 'nonfiltered'  and float(summary_info['Coverage']) >= float(coverage_threshold)):
+                if excluded != []:
+                    url = summary['DocumentSummarySet']['DocumentSummary'][0]['FtpPath_RefSeq']
+                    label = os.path.basename(url)
+                    link = os.path.join(url,label+'_genomic.fna.gz')
+                    links.append(link)
+                    urllib.request.urlretrieve(link, f'{label}.fna.gz')
+                    print(f'Downloading RefSeq file....\n{link}\n')
+                else:
+                    print(f'No RefSeq file for {accession}, due to {excluded}. Skipping')
+
+            elif (download == 'filtered' and float(summary_info['Coverage']) >= float(coverage_threshold)):
+                if (excluded != []):
+                    print(f'No RefSeq URL available for {accession}\nInfo:{excluded}\nDownloading Genbank file because of -d nonfiltered flag.')
+                    url = summary['DocumentSummarySet']['DocumentSummary'][0]['FtpPath_GenBank']
+                    label = os.path.basename(url)
+                    link = os.path.join(url,label+'_genomic.fna.gz')
+                    links.append(link)
+                    urllib.request.urlretrieve(link, f'{label}.fna.gz')
+                else:
+                    print(f'No RefSeq available for {accession} due to {excluded}. Skipping.')
+
+        ## Check for bad quality assemblies, retrieve assembly if desired using GenBank record
+        elif source == 'genbank':
             
             # Get ftp link
-            url = summary['DocumentSummarySet']['DocumentSummary'][0]['FtpPath_RefSeq']
-			
-            ## Retrieve asseblies RefSeq record
-            if (url != '' and float(summary_info['Coverage']) >= float(coverage_threshold)):
-                label = os.path.basename(url)
-                link = os.path.join(url,label+'_genomic.fna.gz')
-                links.append(link)
-                urllib.request.urlretrieve(link, f'{label}.fna.gz')
-                print(f'Downloading....\n{link}\n')
-            
-            ## Check for bad quality assemblies, retrieve assembly if desired using GenBank record
-            elif (url == '' and float(summary_info['Coverage']) >= float(coverage_threshold) and download == 'nonfiltered'):
-                print(f'\tNo RefSeq file available for:\n\n\t {accession}\n\tProbably from metagenome?\n\tAdditional info from NCBI: {extra_info} \n\t{coverage} \n\t{assembly_status}.\n\t Downloading GenBank file if coverage >{coverage_threshold}.\n\tCheck metadata file for info.\n')
-                url = summary['DocumentSummarySet']['DocumentSummary'][0]['FtpPath_GenBank']
-                label = os.path.basename(url)
-                link = os.path.join(url,label+'_genomic.fna.gz')
-                links.append(link)
-                urllib.request.urlretrieve(link, f'{label}.fna.gz')
-                print(f'Downloading despite low quality....\n{link}\n')
+            if (download == 'nonfiltered' and float(summary_info['Coverage']) >= float(coverage_threshold)):
+                if (excluded != []):
+                    print(f'FYI {accession} was flagged by NCBI due to:{excluded}\nDownloading Genbank file anyway because of nonfiltered flag.')
+                    url = summary['DocumentSummarySet']['DocumentSummary'][0]['FtpPath_GenBank']
+                    label = os.path.basename(url)
+                    link = os.path.join(url,label+'_genomic.fna.gz')
+                    links.append(link)
+                    urllib.request.urlretrieve(link, f'{label}.fna.gz')                
+                else:
+                    url = summary['DocumentSummarySet']['DocumentSummary'][0]['FtpPath_GenBank']
+                    label = os.path.basename(url)
+                    link = os.path.join(url,label+'_genomic.fna.gz')
+                    links.append(link)
+                    urllib.request.urlretrieve(link, f'{label}.fna.gz')                
+                    print(f'Downloading GenkBank file....\n{link}\n')
 
-            elif url == '' and download == 'filtered':
-                print(f'No RefSeq file available for:\n\n\t{accession}\n\tAdditional info from NCBI:{extra_info}\n\t{coverage}\n\t{assembly_status}\n\tTo download anyway, rerun and set download to --nonfiltered.\n')
+            elif (download == 'filtered' and float(summary_info['Coverage']) >= float(coverage_threshold)):
+                if (excluded != []):
+                    print(f'{accession} was flagged by NCBI due to:{excluded}\nSkipping download because of -d filtered flag.')
+                else:
+                    url = summary['DocumentSummarySet']['DocumentSummary'][0]['FtpPath_GenBank']
+                    label = os.path.basename(url)
+                    link = os.path.join(url,label+'_genomic.fna.gz')
+                    links.append(link)
+                    urllib.request.urlretrieve(link, f'{label}.fna.gz')                
+                    print(f'Downloading GenkBank file....\n{link}\n')
+           # else:
+           #     print(f'\tNo RefSeq file available for:\n\n\t {accession}\n\tProbably from metagenome?\n\tAdditional info from NCBI: {extra_info} \n\t{coverage} \n\t{assembly_status}.\n\t Downloading GenBank file if coverage >{coverage_threshold}.\n\tCheck metadata file for info.\n')
+
+            #elif url == '' and download == 'filtered':
+            #    print(f'No RefSeq file available for:\n\n\t{accession}\n\tAdditional info from NCBI:{extra_info}\n\t{coverage}\n\t{assembly_status}\n\tTo download anyway, rerun and set download to --nonfiltered.\n')
 
 #            ## Get FASTA link
 #           label = os.path.basename(url)
@@ -209,12 +250,14 @@ def main():
     parser.add_argument('-e', '--email', type=str, required=True, help='Email to provide server.')
     parser.add_argument('-t', '--term', type=str, required=True, help='A search term for searching NCBI assembly database. Use single quotes with spaces.')
     parser.add_argument('-p', '--prefix', type=str, required=True, help='Prefix appended to output files.')
+    parser.add_argument('-s', '--source', choices=['genbank', 'refseq'], nargs='?', default='genbank', const='genbank', required=False, help='Choose database for retrieval. Default is GenBank.')
     parser.add_argument('-c', '--coverage', type=str, required=False, default=5, help='Set coverage threshold for assemblies to download.')
     parser.add_argument('-m', '--retmax', type=int, required=False, default=20, help='Set max number of assemblies to download. Default is 20. Can run script without downloading to see total number of available assemblies in database then set --retmax to that value if downloading all assemblies is desired.')
 #    parser.add_argument('-d', '--download', action=argparse.BooleanOptionalAction, required=False, default=False, help='Should assemblies be downloaded into current directory? Defaults to --no-download.')
-    parser.add_argument('-d', '--download', choices=['none', 'nonfiltered', 'filtered'], nargs='?', default='none', const='none', required=False, help='')
+    parser.add_argument('-d', '--download', choices=['none', 'nonfiltered', 'filtered'], nargs='?', default='none', const='none', required=False, help='Choose whether you want any and all assemblies (nonfiltered) or only those that are not flagged as bad quality by NCBI (filtered).')
     args = parser.parse_args()
-    get_assemblies(args.email, args.term, args.prefix, args.coverage, args.retmax, args.download)	
+    print(args)
+    get_assemblies(args.email, args.term, args.prefix, args.source, args.coverage, args.retmax, args.download)	
 	
 if __name__ == '__main__':
     main()
