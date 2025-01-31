@@ -9,7 +9,7 @@ from Bio import SeqIO
     # and largest sequences in file, 4) average, highest and lowest
     # GC content across sequences.
 
-def seq_info_from_fasta(input_file, output_file):
+def seq_info_from_fasta(input_file):
     
 
     ## set empty values
@@ -51,25 +51,24 @@ def seq_info_from_fasta(input_file, output_file):
 
         GC_contents.append(int(GC*100))
 
-    avg_record_len = total_nt/record_num
-
-    with open(output_file, 'w') as file:
-        file.write(f'Total number of sequences: {record_num:.2f}\nTotal number of nucleotides in file: {total_nt}.\nAverage sequence length: {avg_record_len:.2f}.\nSmallest sequence: {min(seq_lengths)} nts\nLongest sequence: {max(seq_lengths)} nts.\nAverage GC content of records in file: {sum(GC_contents)/len(GC_contents):.2f}%.\nLowest GC content in a single sequence: {min(GC_contents)}%.\nHighest GC content in a single sequence: {max(GC_contents)}%')
+        avg_record_len = total_nt/record_num
+        print(f'\nSEQUENCE {record_num}\nLength: {seq_length}\nGC content: {GC*100:.1f}%.\nIf nt sequence, aa seq length would be: {seq_length/3}\n')
+   # with open(output_file, 'w') as file:
+   #     file.write(f'Total number of sequences: {record_num:.2f}\nTotal number of nucleotides in file: {total_nt}.\nAverage sequence length: {avg_record_len:.2f}.\nSmallest sequence: {min(seq_lengths)} nts\nLongest sequence: {max(seq_lengths)} nts.\nAverage GC content of records in file: {sum(GC_contents)/len(GC_contents):.2f}%.\nLowest GC content in a single sequence: {min(GC_contents)}%.\nHighest GC content in a single sequence: {max(GC_contents)}%')
 
 def main():
 
     ## gather commandline args
 
     input_file = sys.argv[1]
-    output_file = sys.argv[2]
     
-    usage = f'\n\n\tusage: {sys.argv[0]} input_filename.fasta output_filename.txt'
+    usage = f'\n\n\tusage: {sys.argv[0]} input_filename.fasta'
 
     if len(sys.argv) < 2:
         sys.stderr.write(usage)
         sys.exit(1) 
     
-    seq_info_from_fasta(input_file, output_file)
+    seq_info_from_fasta(input_file)
 
 if __name__ == '__main__':
     main()

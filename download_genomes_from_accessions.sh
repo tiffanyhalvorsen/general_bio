@@ -19,5 +19,5 @@ while read line; do
 	rm README.md
 	mv ./ncbi_dataset/data/${line} ./
 	rm -r ncbi_dataset/
-done<${accessions}
+done < ${accessions}
 

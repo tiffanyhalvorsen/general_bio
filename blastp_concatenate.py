@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
 
+## This script takes multiple bastp output files and combines them into
+## a single output file. The input files are identified by pattern-matching.
+
+## Usage: ./blastp_concatenate.sh <input file path> <pattern> <output filename>
+
 import sys
 from pathlib import Path
 import re
@@ -30,20 +35,21 @@ def blastp_concatenate(input_file_path, input_file_pattern, output_file):
                         data = line.split('\t')
                         #print(data)
                         blastp_dict[data[1]] = dict(zip(headers, data))
-    return blastp_dict
+
+    return blastp_dict, output
 
 def main():
     
-    input_file_path = sys.argv[1]
-    input_file_pattern = sys.argv[2]
-    output_file = sys.argv[3]
 
-    usage = f'\n\n\tusage: {sys.argv[0]} filename.fasta\n\n'
+    usage = f'\n\n\tusage: {sys.argv[0]} path/to/files/ pattern output_filename\n\n'
 
     if len(sys.argv) <3:
         sys.stderr.write(usage)
         sys.exit(1)
 
+    input_file_path = sys.argv[1]
+    input_file_pattern = sys.argv[2]
+    output_file = sys.argv[3]
     blastp_concatenate(input_file_path, input_file_pattern, output_file)
 
 if __name__ == '__main__':
